@@ -1,30 +1,42 @@
 package fr.raff.smpkill;
 
+import fr.raff.smpkill.command.RankCommand;
+import fr.raff.smpkill.data.BossBarManager;
+import fr.raff.smpkill.data.RankManager;
 import net.fabricmc.api.ModInitializer;
-
-import net.minecraft.util.Identifier;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.server.network.ServerPlayerEntity;
 
 public class SmpRankkill implements ModInitializer {
-	public static final String MOD_ID = "smp-rankkill";
+    public static final String MOD_ID = "smp-rankkill";
 
-	// This logger is used to write text to the console and the log file.
-	// It is considered best practice to use your mod id as the logger's name.
-	// That way, it's clear which mod wrote info, warnings, and errors.
-	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    @Override
+    public void onInitialize() {
+        System.out.println("[SMP-RankKill] Mod chargé!");
+        RankManager.init();
 
-	@Override
-	public void onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
+        CommandRegistrationCallback.EVENT.register((dispatcher, registry, env) -> {
+            RankCommand.register(dispatcher);
+        });
 
-		LOGGER.info("Hello Fabric world!");
-	}
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            ServerPlayerEntity player = handler.getPlayer();
+            RankManager.onPlayerJoin(player);
+        });
 
-	public static Identifier id(String path) {
-		return Identifier.of(MOD_ID, path);
-	}
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            BossBarManager.remove(handler.getPlayer());
+        });
+
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
+            if (entity instanceof ServerPlayerEntity victim) {
+                if (damageSource.getAttacker() instanceof ServerPlayerEntity killer) {
+                    if (killer.getUuid().equals(victim.getUuid())) return;
+                    RankManager.addKill(killer, victim);
+                }
+            }
+        });
+    }
 }
